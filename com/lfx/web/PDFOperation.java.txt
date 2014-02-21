@@ -1,0 +1,597 @@
+package com.lfx.web;
+
+import com.itextpdf.text.Document;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.text.Rectangle;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.PageSize;
+import com.itextpdf.text.pdf.BaseFont;
+import com.itextpdf.text.Font;
+
+import com.lfx.db.*;
+
+public class PDFOperation
+{
+
+	public static String   getVariableTableValue(VariableTable vt, String varname, String index, boolean bupper)
+	{
+		if (vt == null) return null;
+		String val = vt.getString("WEBCHART."+varname+"_"+index);
+		if (val == null && bupper)
+			val = vt.getString("WEBCHART."+varname);
+		return val;
+	}
+
+	public static String   getVariableTableValue(VariableTable vt, String varname)
+	{
+		if (vt == null) return null;
+		String val = vt.getString("WEBCHART."+varname);
+		return val;		
+	}	
+
+	public static boolean  existVariableTableValue(VariableTable vt, String varname)
+	{
+		if (vt == null) return false;
+		return vt.exists("WEBCHART."+varname);
+	}	
+
+	public static boolean  existVariableTableValue(VariableTable vt, String varname, String index)
+	{
+		if (vt == null) return false;
+		return vt.exists("WEBCHART."+varname+"_"+index);
+	}
+	
+	public final static void writePDF(String file,
+		SimpleDBRowCache data,String title,String note,String footnote,int grpcolcount) 
+		throws java.io.IOException, DocumentException
+	{
+		String arr[]={};
+		writePDF(file,data,title,note,footnote,arr,arr,grpcolcount);	
+	}
+	public final static void writePDF(String file,
+		SimpleDBRowCache data,String title,String note,String footnote,String header[],String footer[],int grpcolcount)
+		throws java.io.IOException, DocumentException
+	{
+		Document document = new Document();
+		PdfWriter.getInstance(document, new java.io.FileOutputStream(file));
+		document.open();
+		writePDF(document,data,title,note,footnote,header,footer,grpcolcount);
+		document.close();
+	}
+	public final static void writePDF(java.io.OutputStream of,
+		SimpleDBRowCache data,String title,String note,String footnote,int grpcolcount) 
+		throws java.io.IOException, DocumentException
+	{
+		String arr[]={};
+		writePDF(of,data,title,note,footnote,arr,arr,grpcolcount);	
+	}
+	public final static void writePDF(java.io.OutputStream of,
+		SimpleDBRowCache data,String title,String note,String footnote,String header[],String footer[],int grpcolcount)
+		throws java.io.IOException, DocumentException
+	{
+		Document document = new Document();
+		PdfWriter.getInstance(document, of);
+		document.open();
+		writePDF(document,data,title,note,footnote,header,footer,grpcolcount);
+		document.close();
+	}
+
+	public final static void writePDF(Document pdf,SimpleDBRowCache data,
+		String title,String note,String footnote,int grpcolcount)
+		throws DocumentException
+	{
+		String arr[]={};
+		writePDF(pdf,data,title,note,footnote,arr,arr,grpcolcount);	
+	}
+
+
+	public final static void writePDF(Document pdf,SimpleDBRowCache data,
+		String title,String note,String footnote, String header[],String footer[],int grpcolcount)
+		throws DocumentException
+	{
+		String arr[]={};
+		writePDF(pdf,data,title,note,footnote,arr,arr,grpcolcount, arr, 500);	
+	}
+
+	public final static void writePDF(Document pdf,SimpleDBRowCache data,
+		String title,String note,String footnote,String headersetting[],String footersetting[],int grpcolcount, String mergecols[], int xlswidth)
+		throws DocumentException
+	{
+		int row,col,totallen=0,rownum=0;
+		float pagewidth=0f;
+		Object row_data[];
+		totallen=data.getWidth(false);
+
+		int mgcols[] = new int[1];
+		int _mergecols[] = new int[data.getColumnCount()];
+		boolean is_merge_column = false;
+		float _pdfwidth[] = new float[data.getColumnCount()];
+
+		PdfPCell cell;
+		PdfPTable s = new PdfPTable(data.getColumnCount());
+
+		pagewidth = 1f * pdf.getPageSize().getWidth();
+
+		if (mergecols != null)
+		{
+		    for(int i=0;i<mergecols.length;i++)
+		    {
+			_mergecols[i] = data.findColumn(mergecols[i]);
+		    }
+		}
+
+		for(row=1;row<=data.getColumnCount();row++)
+		{
+			data.setColumnVisible(row, true);
+			cell = new PdfPCell(new Phrase(data.getColumnLabel(row)));
+			cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+			cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+			s.addCell(cell);
+			_pdfwidth[row - 1] = pagewidth * data.getColumnSize(row)/totallen;
+		}
+		s.setWidths(_pdfwidth);
+
+		boolean newgrp[] = new boolean[data.getColumnCount()];
+		int 	grprows[] = new int[data.getColumnCount()];
+
+		for(row=1;row<=data.getRowCount();row++)
+		{
+			row_data = (Object [])(data.getRow(row));
+			for(col=1;col<=data.getColumnCount();col++)
+			{
+				cell = new PdfPCell();
+				cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+				if (col <= grpcolcount)
+				{
+					newgrp[col - 1] = data.rowEquals(row,row-1,col);
+
+					if (!newgrp[col - 1])
+					{
+						int col_id[] = new int[col];
+						for(int i=0;i<col;i++)
+							col_id[i]=i+1;
+						grprows[col - 1] = data.countgroup(col_id,row);
+					}
+					
+					if (newgrp[col - 1])
+					{
+						//out.write("grp=\"0\" ");
+					}
+					else
+					{ 
+						if (grprows[col-1]>1)
+						{
+							cell.setRowspan(grprows[col-1]);
+						}
+						
+						if(row_data[col - 1] != null)
+						{
+							cell.setPhrase(new Phrase(row_data[col - 1].toString()));
+						}
+						if (data.getColumnType(col) == java.sql.Types.LONGVARCHAR ||
+							data.getColumnType(col) == java.sql.Types.VARCHAR ||
+							data.getColumnType(col) == java.sql.Types.BLOB ||
+							data.getColumnType(col) == java.sql.Types.CLOB ||
+							data.getColumnType(col) == java.sql.Types.CHAR )
+						{
+							if (data.getColumnSize(col) < 20)
+								cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+							else
+								cell.setHorizontalAlignment(Element.ALIGN_LEFT);
+						}
+						else if (data.getColumnType(col) == java.sql.Types.DATE ||
+							data.getColumnType(col) == java.sql.Types.TIME ||
+							data.getColumnType(col) == java.sql.Types.TIMESTAMP )
+						{
+							cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+						}
+						else
+						{
+							cell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+						}
+						s.addCell(cell);
+					}
+				}
+				else
+				{
+				    is_merge_column = false;
+				    if (mergecols != null && mergecols.length > 0)
+				    {
+					for(int i=0;i<mergecols.length;i++)
+					{
+						if (_mergecols[i] == col)
+						{
+							is_merge_column = true;
+							mgcols[0] = col; 
+							newgrp[col - 1] = data.rowEquals(row,row-1,mgcols);
+
+							if (!newgrp[col - 1])
+								grprows[col - 1] = data.countgroup(mgcols,row);
+					
+							if (newgrp[col - 1])
+							{
+								//out.write("grp=\"0\" ");
+							}
+							else 
+							{
+								if (grprows[col-1]>1)
+								{
+									cell.setRowspan(grprows[col-1]);
+								}
+								if(row_data[col - 1] != null)
+								{
+									cell.setPhrase(new Phrase(row_data[col - 1].toString()));
+								}
+								if(row_data[col - 1] != null)
+								{
+									cell.setPhrase(new Phrase(row_data[col - 1].toString()));
+								}
+								if (data.getColumnType(col) == java.sql.Types.LONGVARCHAR ||
+									data.getColumnType(col) == java.sql.Types.VARCHAR ||
+									data.getColumnType(col) == java.sql.Types.BLOB ||
+									data.getColumnType(col) == java.sql.Types.CLOB ||
+									data.getColumnType(col) == java.sql.Types.CHAR )
+								{
+									if (data.getColumnSize(col) < 20)
+										cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+									else
+										cell.setHorizontalAlignment(Element.ALIGN_LEFT);
+								}
+								else if (data.getColumnType(col) == java.sql.Types.DATE ||
+									data.getColumnType(col) == java.sql.Types.TIME ||
+									data.getColumnType(col) == java.sql.Types.TIMESTAMP )
+								{
+									cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+								}
+								else
+								{
+									cell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+								}
+								s.addCell(cell);
+							}
+						}
+					}
+				    }
+				    if (!is_merge_column)
+				    {
+					if(row_data[col - 1] != null)
+					{
+						cell.setPhrase(new Phrase(row_data[col - 1].toString()));
+					}
+					if(row_data[col - 1] != null)
+					{
+						cell.setPhrase(new Phrase(row_data[col - 1].toString()));
+					}
+					if (data.getColumnType(col) == java.sql.Types.LONGVARCHAR ||
+						data.getColumnType(col) == java.sql.Types.VARCHAR ||
+						data.getColumnType(col) == java.sql.Types.BLOB ||
+						data.getColumnType(col) == java.sql.Types.CLOB ||
+						data.getColumnType(col) == java.sql.Types.CHAR )
+					{
+						if (data.getColumnSize(col) < 20)
+							cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+						else
+							cell.setHorizontalAlignment(Element.ALIGN_LEFT);
+					}
+					else if (data.getColumnType(col) == java.sql.Types.DATE ||
+						data.getColumnType(col) == java.sql.Types.TIME ||
+						data.getColumnType(col) == java.sql.Types.TIMESTAMP )
+					{
+						cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+					}
+					else
+					{
+						cell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+					}
+					s.addCell(cell);
+				    }
+				}
+			}
+		}
+		pdf.add(s);
+
+	}
+	public static void generatePDF(java.io.OutputStream out,VariableTable vt) 
+		throws java.io.IOException
+    	{
+		int i=0,sql_count=0;
+		DBRowCache crosstab = null, temprows=null;
+    		String chartquery = null;
+		String charttype  = null;
+		String iscrosstab = null;
+		String dbname = null;
+		String dbrule = null;
+		String express = null;
+		String foreach = null;
+		String xlswidth = "500";
+		String ignmarkdown = null;
+		String ignsqlerror = null;
+		java.util.Vector foreachlist = new java.util.Vector();
+		java.util.Vector querylist = new java.util.Vector();
+
+		DBPooledConnection db	= null;
+
+		if(existVariableTableValue(vt,"QUERY") && getVariableTableValue(vt,"QUERY") != null)
+                {
+			querylist = TextUtils.getWords(getVariableTableValue(vt,"QUERY"),",");
+                }
+                else
+                {
+  		    for(i=0;i<100;i++)
+		    {
+			if (existVariableTableValue(vt,"QUERY",String.valueOf(i+1))) 
+			{
+				chartquery = getVariableTableValue(vt,"QUERY",String.valueOf(i+1),false);
+				if (chartquery != null && chartquery.length() > 0)
+				{
+					querylist.addElement(String.valueOf(i+1));
+				}			
+			}
+		    }
+		}
+
+		try {
+		Rectangle rect = PageSize.A4;
+
+		Document pdf = new Document(rect, -30f, -30f, 30f, 30f);
+		PdfWriter.getInstance(pdf, out);
+		pdf.open();
+
+		if (querylist.size()>0)
+		{
+			crosstab = DBOperation.getDBRowCache();
+			for(i=0;i<querylist.size();i++)
+			{
+			    crosstab = DBOperation.getDBRowCache();
+			    iscrosstab = getVariableTableValue(vt, "CROSSTAB", querylist.elementAt(i).toString(), true);
+			    chartquery = getVariableTableValue(vt, "QUERY", querylist.elementAt(i).toString(),false);
+			    charttype = getVariableTableValue(vt, "TYPE", querylist.elementAt(i).toString(),false);
+			    dbname = getVariableTableValue(vt, "DBNAME", querylist.elementAt(i).toString(),true);
+			    dbrule = getVariableTableValue(vt, "DBID", querylist.elementAt(i).toString(),true);
+			    ignsqlerror = getVariableTableValue(vt, "IGNORE_SQLERROR", querylist.elementAt(i).toString(),true);
+			    ignmarkdown = getVariableTableValue(vt, "IGNORE_MARKDOWN", querylist.elementAt(i).toString(),true);
+
+			    foreach = vt.parseString(getVariableTableValue(vt, "FORALL", querylist.elementAt(i).toString(),false));
+				
+			    foreachlist.removeAllElements();
+			    if (foreach != null)
+				foreachlist.addAll(TextUtils.getLines(foreach));
+			    
+			    for(int forj=0; forj < (foreachlist.size() > 0 ? foreachlist.size() : 1); forj++)
+			    {
+				if (forj < foreachlist.size())
+				{
+				  if (foreachlist.get(forj) == null ||
+				    foreachlist.get(forj).toString().trim().length() == 0)
+				    continue;
+				  vt.setValue(foreachlist.get(forj).toString());
+				}
+
+				if (!chartquery.equals("-"))
+				{
+				    crosstab = null;
+				    crosstab = DBOperation.getDBRowCache();
+				    for(int dsloop=0; dsloop < 2; dsloop ++)
+				    {
+				      try {
+				        db = DBLogicalManager.getPoolConnection(vt.parseString(dbname), vt.parseString(dbrule));
+					chartquery = getVariableTableValue(vt, "QUERY", querylist.elementAt(i).toString(),false);
+					if (chartquery.equalsIgnoreCase("*"))
+					{
+						chartquery = getVariableTableValue(vt, "QUERY_"+db.getDBTag(), querylist.elementAt(i).toString(),false);
+					}
+					java.util.Vector cross_fields = TextUtils.getWords(iscrosstab,"|");
+					if (cross_fields.size()==0)
+						crosstab = DBOperation.executeQuery(db,chartquery,vt);
+					else if(cross_fields.size() < 3)
+						crosstab = DBOperation.executeCrossTab(db,chartquery,vt);
+					else
+						crosstab = DBOperation.executeCrossTab(db,chartquery,vt,
+							TextUtils.toStringArray(
+								TextUtils.getWords(cross_fields.elementAt(0).toString(),",")),
+							TextUtils.toStringArray(
+								TextUtils.getWords(cross_fields.elementAt(1).toString(),",")),
+							TextUtils.toStringArray(
+								TextUtils.getWords(cross_fields.elementAt(2).toString(),",")));
+					express = getVariableTableValue(vt, "EXPRESS", querylist.elementAt(i).toString(),true);
+					if (express != null)
+					{
+					    String colname;
+					    String expstr;
+					    String expcols[] = null;
+					    String colarrs[] = null;
+					    java.util.Vector expwords;
+					    String exparr[] = TextUtils.toStringArray(TextUtils.getLines(express));
+					    for(int tmpk=0; tmpk < exparr.length; tmpk++)
+					    {
+					    	expwords = TextUtils.getWords(exparr[tmpk],"|");
+					    	if (expwords.size() >= 3)
+					    	{
+					    		colname = expwords.elementAt(0).toString();
+					    		expstr  = expwords.elementAt(1).toString();
+					    		expcols = TextUtils.toStringArray(TextUtils.getWords(expwords.elementAt(2).toString(),","));
+							if (expwords.size() > 3)
+								colarrs = TextUtils.toStringArray(TextUtils.getWords(expwords.elementAt(3).toString(),","));
+					    		if (expcols.length < 2)
+					    		{
+					    		    crosstab.addExpression(colname, expstr, expcols[0], colarrs);
+					    		}
+					    		else if (expcols.length < 3)
+					    		{
+					    		    crosstab.addExpression(colname, expstr, expcols[0],expcols[1], colarrs);
+					    		}
+					    		else if (expcols.length < 4)
+					    		{
+					    		    crosstab.addExpression(colname, expstr, expcols[0],expcols[1],expcols[2], colarrs);
+					    		}					    		
+						}
+					    }
+					}
+					express = getVariableTableValue(vt, "FILTER", querylist.elementAt(i).toString(),true);
+					if (express != null)
+					{
+					    String expstr;
+					    java.util.Vector expwords;
+					    String expcols[] = null;
+					    String exparr[] = TextUtils.toStringArray(TextUtils.getLines(express));
+					    for(int tmpk=0; tmpk < exparr.length; tmpk++)
+					    {
+					    	expwords = TextUtils.getWords(exparr[tmpk],"|");
+					    	if (expwords.size() >= 2)
+					    	{
+					    		expstr = expwords.elementAt(0).toString();
+					    		expcols = TextUtils.toStringArray(TextUtils.getWords(expwords.elementAt(1).toString(),","));
+					    		if (expcols.length < 2)
+					    		{
+					    		    crosstab.expressFilter(expstr, expcols[0]);
+					    		}
+					    		else if (expcols.length < 3)
+					    		{
+					    		    crosstab.expressFilter(expstr, expcols[0], expcols[1]);
+					    		}
+					    		else if (expcols.length < 4)
+					    		{
+					    		    crosstab.expressFilter(expstr, expcols[0], expcols[1], expcols[2]);
+					    		}					    		
+						}
+					    }
+					}					
+					break;
+				      }
+			 	      catch(java.sql.SQLException sqle)
+				      {
+					crosstab = DBOperation.getDBRowCache();
+					db.checkSQLState(sqle.getSQLState());
+					if (dsloop == 1)
+					{
+					    if ("YES".equalsIgnoreCase(ignsqlerror))
+					    {
+						continue;
+					    }
+					    else
+					    {
+						throw new java.io.IOException(sqle.getMessage());
+					    }
+					}
+				      }
+				      catch(DatabaseMarkdownException dme)
+				      {
+					if (dsloop == 1)
+					{
+					    if ("YES".equalsIgnoreCase(ignsqlerror) || "YES".equalsIgnoreCase(ignmarkdown))
+					    {
+						continue;
+					    }
+					    else
+					    {
+						throw dme;
+					    }
+					}
+				      }
+				      finally
+				      {
+					if (db != null) db.close();
+				      }
+				    }
+				}
+				db = null;
+
+				String chartlabel = getVariableTableValue(vt,"LABEL",querylist.elementAt(i).toString(),true);
+				java.util.Vector label = TextUtils.getFields(chartlabel,"|");
+				for(int j=0;j<label.size() && j<crosstab.getColumnCount();j++)
+				{
+					if (label.elementAt(j) != null)
+						crosstab.setColumnLabel(j+1,label.elementAt(j).toString());
+				}
+				if (crosstab.getRowCount()==1)
+				{
+					for(int j=1;j<=crosstab.getColumnCount();j++)
+					{
+						vt.add("QUERY_"+querylist.elementAt(i).toString()+"."+crosstab.getColumnName(j),
+							crosstab.getColumnType(j));
+						vt.setValue("QUERY_"+querylist.elementAt(i).toString()+"."+crosstab.getColumnName(j),
+							crosstab.getItem(1,j));
+					}
+				}
+		                String sortcolumns = getVariableTableValue(vt,"SORT",querylist.elementAt(i).toString(),true);
+				if (sortcolumns != null)
+				{
+					crosstab.quicksort(TextUtils.toStringArray(TextUtils.getWords(sortcolumns,",")));
+				}				
+				if (charttype == null || !charttype.equals("-"))
+				{
+					if (temprows != null)
+					{
+						temprows.appendRow(crosstab);
+						crosstab = temprows;
+					}				
+					String isexcel = getVariableTableValue(vt,"EXCEL",querylist.elementAt(i).toString(),true);
+					if (isexcel == null)
+						isexcel = "YES";
+					String title = getVariableTableValue(vt,"XLSTITLE",querylist.elementAt(i).toString(),true);
+					String note = getVariableTableValue(vt,"XLSSUBTITLE",querylist.elementAt(i).toString(),true);
+					String footnote = getVariableTableValue(vt,"XLSFOOTNOTE",querylist.elementAt(i).toString(),true);
+					String grp = getVariableTableValue(vt,"GROUP",querylist.elementAt(i).toString(),true);
+					String header = getVariableTableValue(vt,"XLSHEADER",querylist.elementAt(i).toString(),true);
+					String footer = getVariableTableValue(vt,"XLSFOOTER",querylist.elementAt(i).toString(),true);
+					String mergecols = getVariableTableValue(vt,"MERGE",querylist.elementAt(i).toString(),true);
+					xlswidth = getVariableTableValue(vt, "XLSWIDTH", querylist.elementAt(i).toString(),true);
+
+
+					if (title == null) title = "";
+					if (note == null) note = "";
+					if (footnote == null) footnote = "";
+					if (header == null) header = "";
+					if (footer == null) footer = "";
+					if (mergecols == null) mergecols = "";
+
+					String headersetting[] = TextUtils.toStringArray(TextUtils.getLines(header));
+					String footersetting[] = TextUtils.toStringArray(TextUtils.getLines(footer));
+					String mergecolslist[] = TextUtils.toStringArray(TextUtils.getLines(mergecols));
+
+					for(int j=0;j<headersetting.length;j++)
+						headersetting[j]=vt.parseString(headersetting[j]);
+					for(int j=0;j<footersetting.length;j++)
+						footersetting[j]=vt.parseString(footersetting[j]);
+					title = vt.parseString(title);
+					note = vt.parseString(note);
+					footnote=vt.parseString(footnote);
+					if (!("NO".equalsIgnoreCase(isexcel.trim())))
+						writePDF(pdf,(SimpleDBRowCache)crosstab,title,note,footnote,
+							headersetting,footersetting,getint(grp,2), mergecolslist, getint(xlswidth,500));
+				}
+				else
+				{
+					if (temprows==null || temprows.getColumnCount() != crosstab.getColumnCount())
+					{
+						temprows = DBOperation.getDBRowCache();
+						temprows.copyColumns(crosstab);
+					}
+					temprows.appendRow(crosstab);
+				}
+			    }
+			}
+		}
+		pdf.close();
+		} catch (DocumentException de) {}
+		out.flush();
+		out.close();
+	}
+
+	private static int getint(String val,int def)
+	{
+		try {
+			if (val != null)
+				return Integer.valueOf(val).intValue();
+		}
+	 	catch (java.lang.NumberFormatException nfe)
+		{
+			return def = 2;
+		}
+		return def;
+	}
+}

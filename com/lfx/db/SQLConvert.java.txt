@@ -1,0 +1,352 @@
+package com.lfx.db;
+public final class SQLConvert 
+{
+	public static final SQLQuery parseCall(String call)
+	{
+		return parseCall(call,null);
+	}
+	public static final SQLQuery parseCall(String call,VariableTable vt)
+	{
+		int i;
+		if (call == null) return null;
+		String source="";
+		StringBuffer dest = new StringBuffer();
+		java.util.Vector paramlist=new java.util.Vector();
+		java.util.Vector paramtype=new java.util.Vector();
+		source = call;
+		boolean prevparam=false;
+		String word="";
+		java.util.Vector words = getFullWords(call.toCharArray());
+		paramlist.removeAllElements();
+		paramtype.removeAllElements();
+		Object temp_val;
+		for(i=0;i<words.size();i++)
+		{
+			word = words.elementAt(i).toString();
+			if (word.equals(" "))
+			{
+				dest.append(word);
+			}
+			else if (word.equals("\t"))
+			{
+				dest.append(word);
+			}
+			else if (word.equals("\r"))
+			{
+				dest.append(word);
+			}
+			else if (word.equals("\n"))
+			{
+				dest.append(word);
+			}
+			else if  (word.startsWith(":"))
+			{
+				if (!word.equals(":"))
+				{
+					paramlist.addElement(
+						word.substring(1).toUpperCase());
+					prevparam = true;
+					dest.append("?");
+					paramtype.addElement("IN");
+				}
+				else
+					dest.append(word);
+				continue;
+			}
+			else if (word.equalsIgnoreCase("IN"))
+			{
+				if(prevparam)
+				{
+					prevparam = false;
+					continue;
+				}
+				dest.append(word);
+			}
+			else if (word.equalsIgnoreCase("OUT"))
+			{
+				if(prevparam)
+				{
+					prevparam = false;
+					paramtype.setElementAt("OUT",
+						paramtype.size()-1);
+					continue;
+				}
+				dest.append(word);
+			}
+			else if (word.equalsIgnoreCase("INOUT"))
+			{
+				if(prevparam)
+				{
+					prevparam = false;
+					paramtype.setElementAt("INOUT",
+						paramtype.size()-1);
+					continue;
+				}
+				dest.append(word);
+			}
+			else
+			{
+				if (word.equals("?"))
+				{
+					paramlist.addElement("?");
+					paramtype.addElement("?");
+				}
+				if (vt != null && word.indexOf("&")>=0 
+					&& !word.startsWith("'") && !word.startsWith("\"") )
+					dest.append(vt.parseString(word,'&'));
+				else
+					dest.append(word);
+				if (word.equals("="))
+					dest.append(" call ");
+				prevparam = false;
+			}
+		}
+		if (!dest.toString().startsWith("?"))
+		{
+			dest.insert(0,"call ");
+		}
+		else
+		{
+			if (paramtype.size()>0)
+				paramtype.setElementAt("OUT",0);
+		}
+		return new SQLQuery(source,dest.toString(),
+			toArray(paramlist),toArray(paramtype));
+	}
+
+	public static final SQLQuery parseSQL(String call) 
+	{
+		return parseSQL(call,null);
+	}
+
+	public static final SQLQuery parseSQL(String call,VariableTable vt) 
+	{
+		int i;
+		if (call == null) return null;
+		String source="";
+		StringBuffer dest = new StringBuffer();
+		java.util.Vector paramlist=new java.util.Vector();
+		java.util.Vector paramtype=new java.util.Vector();
+		source = call;
+		boolean prevparam=false;
+		String word="";
+		java.util.Vector words = getFullWords(call.toCharArray());
+		Object temp_val;
+		paramlist.removeAllElements();
+		paramtype.removeAllElements();
+		for(i=0;i<words.size();i++)
+		{
+			word = words.elementAt(i).toString();
+			if (word.equals(" "))
+			{
+				dest.append( word);
+			}
+			else if (word.equals("\t"))
+			{
+				dest.append( word);
+			}
+			else if (word.equals("\r"))
+			{
+				dest.append( word);
+			}
+			else if (word.equals("\n"))
+			{
+				dest.append( word);
+			}
+			else if  (word.startsWith(":"))
+			{
+				if (!word.equals(":"))
+				{
+					paramlist.addElement(
+						word.substring(1).toUpperCase());
+					prevparam = true;
+					dest.append("?");
+					paramtype.addElement("IN");
+					continue;
+				}
+				dest.append(word);
+			}
+			else if (word.equalsIgnoreCase("IN"))
+			{
+				if(prevparam)
+				{
+					prevparam = false;
+					continue;
+				}
+				dest.append(word);
+			}
+			else if (word.equalsIgnoreCase("OUT"))
+			{
+				if(prevparam)
+				{
+					prevparam = false;
+					paramtype.setElementAt("OUT",
+						paramtype.size()-1);
+					continue;
+				}
+				dest.append(word);
+			}
+			else if (word.equalsIgnoreCase("INOUT"))
+			{
+				if(prevparam)
+				{
+					prevparam = false;
+					paramtype.setElementAt("INOUT",
+						paramtype.size()-1);
+					continue;
+				}
+				dest.append(word);
+			}
+			else
+			{
+				if (vt != null && word.indexOf("&")>=0 
+					&& !word.startsWith("'") && !word.startsWith("\"") )
+					dest.append(vt.parseString(word,'&'));
+				else
+					dest.append(word);
+				prevparam = false;
+			}
+		}
+		return new SQLQuery(source,dest.toString(),
+			toArray(paramlist),toArray(paramtype));
+	}
+
+	private static final String[] toArray(java.util.Vector v)
+	{
+		int i;
+		String r_arr[] = {};
+		if (v == null) return null;
+		if (v.size()==0) return r_arr;
+		r_arr = new String[v.size()];
+		for(i=0;i<v.size();i++)
+		{
+			r_arr[i] = v.elementAt(i).toString();
+		}
+		return r_arr;
+	}
+
+	private static final boolean isPreSpace(char c)
+	{
+		char wordsend[] = {' ','\t','\r','\n'};
+		int i;
+		for(i=0;i<wordsend.length;i++)
+			if (c==wordsend[i])
+				return true;
+		return false;
+	}
+
+	private static final boolean isWordsEnd(char start,char end)
+	{
+		if (start=='\'')
+		{
+			if (end=='\'')
+				return true;
+			else
+				return false;
+		}
+		if (start=='"')
+		{
+			if (end=='"')
+				return true;
+			else
+				return false;
+		}
+		if (start=='[')
+		{
+			if (end==']')
+				return true;
+			else
+				return false;
+		}
+		
+		//if (end == '\'' || end == '"') 
+		//	return true;		
+
+		if (start==',')
+		{
+			if (isSingleWords(end)||isPreSpace(end))
+				return true;
+			return false;
+		}
+		if (isSingleWords(end)||isPreSpace(end))
+			return true;
+		return false;
+	}
+
+	private static final boolean isSingleWords(char c)
+	{
+		char keys[]={'}',')','(','{',',','=','+','-','/','*','\n',' ','\t','\r','|'};
+		int i;
+		for (i = 0; i<keys.length;i++)
+			if ( c==(keys[i])) return true;
+		return false;
+	}
+	private static final java.util.Vector getFullWords(char[] line)
+	{
+		String wordstart = "";
+		int pos=0,offs=0;
+		java.util.Vector words = 
+			new java.util.Vector();
+		if (line == null) return words;
+		if (line.length==0) return words;
+		while(isPreSpace(line[offs]))
+		{
+			offs++;
+		}
+		if (offs == line.length) return words;
+		while(offs < line.length)
+		{
+			pos=1;
+			while((offs < line.length) &&
+				isSingleWords(line[offs]))
+			{
+				words.addElement(String.valueOf(line,offs,1));
+				offs ++;
+				continue;
+			}
+			while(offs + pos < line.length && !isWordsEnd(line[offs],line[offs + pos]))
+			{
+				pos++;
+			}
+			pos ++;
+		        if (offs + pos >= line.length)
+			{
+			        if (isSingleWords(line[line.length - 1]))
+				{
+					words.addElement(String.valueOf(line,offs,pos-1));
+					words.addElement(String.valueOf(line,line.length-1,1));
+					return words;
+				}
+				else
+				{
+					words.addElement(String.valueOf(line,offs,line.length-offs));
+					return words;
+				}
+			}	
+			else
+			{
+			        if (isSingleWords(line[offs + pos - 1]))
+				{
+				    words.addElement(String.valueOf(line,offs,pos-1));
+				    words.addElement(String.valueOf(line,offs+pos-1,1));
+				    offs = offs+pos;
+				}
+				else
+				{
+				   words.addElement(String.valueOf(line,offs,pos));
+				   offs = offs+pos;
+				}
+		        }
+			while(offs < line.length && isSingleWords(line[offs]))
+			{
+				words.addElement(String.valueOf(line,offs,1));
+				offs ++;
+			}
+			while(offs < line.length && isPreSpace(line[offs]))
+			{
+				offs ++;
+			}
+		}
+		return words;
+	}
+}

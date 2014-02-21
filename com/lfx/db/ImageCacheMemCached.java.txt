@@ -1,0 +1,72 @@
+package com.lfx.db;
+import com.danga.MemCached.*;
+
+public class ImageCacheMemCached
+{
+     private static String           serverlist = null;
+     private static MemCachedClient  _cache = null;
+     private static SockIOPool	     _sock  = null;
+
+     public static void setServerList(String servers)
+     {
+          serverlist = servers;
+	  if (serverlist != null)
+          {
+             String tmpserv[] = TextUtils.toStringArray(TextUtils.getWords(serverlist,","));
+	     if (tmpserv.length > 0)
+             {
+		  _cache = new MemCachedClient(); 
+		  _sock  = SockIOPool.getInstance();
+		  _sock.setServers(tmpserv);
+                  _sock.setInitConn( 5 );
+                  _sock.setMinConn( 5 );
+                  _sock.setMaxConn( 250 );
+                  _sock.setMaxIdle( 1000 * 60 * 60 * 6 );
+
+                  _sock.setNagle( false );
+                  _sock.setSocketTO(1000 );
+                  _sock.setSocketConnectTO(1000);
+		  _sock.setAliveCheck(true);
+		  _sock.setFailover(true);
+		  _sock.setFailback(false);
+     
+                  _sock.initialize();
+             }
+          }
+     }
+
+     public static boolean isMemCachedAlive()
+     {
+         return (_sock != null && _sock.isInitialized());
+     }
+
+     public static  boolean putObject(String _key, Object _value, long _keeptime)
+     {
+	java.util.Date expire = new java.util.Date(_keeptime);
+	boolean putok=false;
+	if (_sock != null && _sock.isInitialized())
+	{
+	    putok = _cache.replace(_key, _value, expire);
+	    if (!putok) putok = _cache.set(_key, _value, expire);
+	    if (!putok) putok = _cache.add(_key, _value, expire);
+	    return putok;
+	}
+	return false;
+     }
+
+     public static  Object getObject(String _key)
+     {
+	if (_sock != null && _sock.isInitialized())
+	{
+	    return _cache.get(_key);
+	}
+	return null;
+     }
+     public static void delObject(String _key)
+     {
+	if (_sock != null && _sock.isInitialized())
+	{
+	    _cache.delete(_key);
+	}
+     }
+}

@@ -1,0 +1,140 @@
+package com.lfx.web;
+import java.io.*;
+import java.util.*;
+import javax.servlet.*;
+import javax.servlet.http.*;
+import com.lfx.db.*;
+
+public class WebProcServlet extends BaseServlet {
+
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+    	throws IOException, ServletException
+    {
+        PrintWriter out = response.getWriter();
+	VariableTable vt = new VariableTable();
+	Enumeration e = null;
+	String file="";
+	File os_file=null;
+	String login_id = null;
+	String login_role = null;
+	java.util.Vector v_temp = null;
+
+	file = getPhysicalPath(request,request.getServletPath());
+
+	vt.loadFile(getPhysicalPath(request,"/global.wcml"));
+
+	os_file = new File(file);
+
+	if (os_file.exists())
+	{
+		vt.loadFile(getPhysicalPath(request,"default.wcml"));
+		vt.loadFile(file);
+	}
+
+	vt.remove("SESSION.LOGINID");
+	vt.remove("SESSION.LOGINNAME");
+	vt.remove("SESSION.LOGINROLE");
+
+	getEnv(vt,request);
+
+	if (!vt.exists("WEBCHART.TMPDIR") || vt.getString("WEBCHART.TMPDIR") == null)
+	{
+		vt.add("WEBCHART.TMPDIR",java.sql.Types.VARCHAR);
+		vt.setValue("WEBCHART.TMPDIR",Application.getRealPath("/temp"));
+	}	
+	
+	login_id = vt.getString("SESSION.LOGINID");
+	login_role = vt.getString("SESSION.LOGINROLE");
+
+	if (!checkAccess(login_id,login_role,vt))
+	{
+		forward(response,vt.getString("WEBCHART.ACCESSDENY"));
+		return;
+	}
+
+	String xsldoc = vt.getString("WEBCHART.XSLDOC") ;
+
+	if (xsldoc != null && xsldoc.trim().length()>0 && "HTML".equals(vt.getString("WEBCHART.DOCTYPE")))
+	{
+		String tmpdir = vt.getString("WEBCHART.TMPDIR") ;
+		os_file = new java.io.File(tmpdir);
+		os_file = os_file.createTempFile("tmp",".xml",os_file);
+		java.io.FileWriter xmldoc = new java.io.FileWriter(os_file);
+
+		writeXMLHeader(xmldoc,vt);
+		xmldoc.write("<root>\n");
+		vt.writeXMLBody(xmldoc);
+		runProc(xmldoc,vt);
+		xmldoc.write("</root>\n");	
+		xmldoc.close();
+
+		setHTMLContentType(response,vt);
+
+		XML2HTML(out,os_file.getAbsolutePath(),getPhysicalPath(request,xsldoc));
+
+		os_file.delete();
+	}
+	else
+	{
+		setXMLContentType(response,vt);
+		writeXMLHeader(out,vt,xsldoc);
+		out.write("<root>\n");
+		vt.writeXMLBody(out);
+		runProc(out,vt);
+		out.write("</root>\n");	
+	}
+	out.flush();
+    }
+
+    public void doPost(HttpServletRequest request, HttpServletResponse response)
+    	throws IOException, ServletException
+    {
+	doGet(request,response);
+    }
+
+	private static void runProc(java.io.Writer out,VariableTable vt) 
+		throws java.io.IOException 
+    	{
+		int i=0,rows;
+    		String dmlquery = null;
+		String dbname = null;
+
+		java.sql.Connection db	= null;
+		
+		while(true)
+		{
+			if (vt.exists("WEBCHART.DML_"+(i+1))) 
+			{
+				out.write("<webchart id=\""+(i+1)+"\">\n");
+				dmlquery = (vt == null?null:vt.getString("WEBCHART.DML_"+(i+1)));
+				dbname = (vt == null?null:vt.getString("WEBCHART.DBNAME_"+(i+1)));
+				if (dbname==null)
+					dbname = (vt == null?null:vt.getString("WEBCHART.DBNAME"));
+				db = DBPoolManager.getPoolConnection(dbname);
+				try {
+					rows = DBOperation.executeUpdate(db,dmlquery,vt);
+					db.commit();
+					out.write("  <result>1</result>\n");
+					out.write("  <rows>"+rows+"</rows>\n");
+				}
+			 	catch(java.sql.SQLException sqle)
+				{
+					out.write("  <result>0</result>\n");
+					out.write("  <error><![CDATA["+sqle.getMessage()+"]]></error>\n");
+				}
+				finally
+				{
+					DBPoolManager.putPoolConnection(dbname,db);
+				}
+				db = null;
+				out.write("</webchart>\n");
+			}
+			else
+			{
+				break;
+			}
+			i++;
+		}
+	}
+
+}
